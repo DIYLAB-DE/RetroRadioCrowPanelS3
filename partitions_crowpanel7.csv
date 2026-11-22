@@ -1,0 +1,6 @@
+# Name, Type, SubType, Offset, Size, Flags
+# 4 MB Flash: NVS, die größtmögliche Firmware und am Ende die Senderliste (zwei Ablageplätze zu je 32 KB, Format wie StationManager). Kein OTA, kein SPIFFS, kein Coredump.
+# 0xE000 bis 0xFFFF bleibt frei: Der Standard-Upload schreibt dorthin boot_app0, das darf keine NVS-Seite treffen.
+nvs, data, nvs, 0x9000, 0x5000,
+factory, app, factory, 0x10000, 0x3E0000,
+stations, data, 0x80, 0x3F0000, 0x10000,

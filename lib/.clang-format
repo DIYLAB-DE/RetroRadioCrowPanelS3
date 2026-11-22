@@ -1,0 +1,4 @@
+# Bibliotheken unter lib/ bleiben einschließlich aller Unterordner unformatiert.
+# .clang-format-ignore kann das nicht leisten, weil * dort keine Unterordner erfasst.
+DisableFormat: true
+SortIncludes: Never

@@ -1,0 +1,10 @@
+.pio/
+.pio-core/
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+*.log
+platformio_lokal.ini
+.env
+.env.*
