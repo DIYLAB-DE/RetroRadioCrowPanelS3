@@ -11,6 +11,7 @@
 #include <cJSON.h>
 #include <esp_random.h>
 #include <esp_heap_caps.h>
+#include <esp_netif.h>
 #include <esp_ota_ops.h>
 #include <esp_psram.h>
 #include <esp_timer.h>
@@ -19,7 +20,6 @@
 #include <cmath>
 #include <ctime>
 #include <lwip/sockets.h>
-#include <cerrno>
 #include <new>
 // Die Firmware-Kennung kommt über das Build-Flag FW_VERSION (scripts/fw_version.py).
 #ifndef FW_VERSION
@@ -30,14 +30,13 @@ namespace
 {
     using Json = std::unique_ptr<cJSON, decltype(&cJSON_Delete)>;
 
-    /** @brief Speicher für cJSON aus dem PSRAM. Ohne das landen alle Knoten und Texte unter 4 KB im internen RAM, allein die Senderliste mit 70 Einträgen braucht so rund 35 KB und drückt den freien internen RAM unter die Reserve von sendBounded. */
+    /** @brief Speicher für cJSON aus dem PSRAM. Ohne das landen alle Knoten und Texte unter 4 KB im internen RAM, allein die Senderliste mit 70 Einträgen braucht so rund 35 KB und drückt den freien internen RAM unter die Transportreserve des Sendewegs. */
     void *jsonMalloc(size_t size)
     {
         return heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
 
-    constexpr size_t HttpSendBlock = 1024;
-    constexpr uint32_t HttpSendPauseMs = 8; ///< Begrenzt die höherpriorisierte WLAN-/lwIP-Arbeit auf dem Decoderkern
+    constexpr uint32_t HttpSendPauseMs = 8; ///< Pause nach je einem gesendeten Block, begrenzt die höherpriorisierte WLAN-/lwIP-Arbeit auf dem Decoderkern
     // Die Aufnahme umfasst das ganze Display.
     constexpr int ShotWidth = CrowPanelRender::PanelWidth, ShotHeight = CrowPanelRender::PanelHeight;
     constexpr uint32_t ShotBytes = ShotWidth * ShotHeight * 2;
@@ -46,27 +45,14 @@ namespace
     constexpr int FtpPasswordSteps = 60;    ///< Höchstens 3 s auf ein erstmals erzeugtes Passwort warten
     constexpr int FtpRenewSteps = 100;      ///< Höchstens 5 s auf ein erneuertes und gespeichertes Passwort warten
 
-    /** @brief Begrenzt HTTP-Sendeblöcke und wahrt internen RAM für WLAN und TLS. Die Pause verteilt die höherpriorisierte Netzwerkarbeit auf Kern 0, damit der Audiodecoder dort regelmäßig laufen kann. */
-    int sendBounded(httpd_handle_t, int socket, const char *bytes, size_t length, int flags)
+    /** @brief Liest die IPv4-Adresse der WLAN-Station ohne WLAN-Aufruf. Den Netzstatus der Dienste trägt der Dienstworker erst in seiner Schleife nach, direkt nach dem Verbinden fehlt die Adresse dort noch. @param ip Ziel, 0.0.0.0 ohne Adresse. */
+    void stationAddress(uint8_t (&ip)[4])
     {
-        const uint32_t started = millis();
-        while (heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < WebPortal::InternalTransportReserve || heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < 4096)
-        {
-            if (millis() - started >= 3000)
-                return HTTPD_SOCK_ERR_TIMEOUT;
-            vTaskDelay(pdMS_TO_TICKS(2));
-        }
-        const int sent = send(socket, bytes, std::min(length, HttpSendBlock), flags);
-        if (sent < 0)
-            return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ? HTTPD_SOCK_ERR_TIMEOUT : HTTPD_SOCK_ERR_FAIL;
-        vTaskDelay(pdMS_TO_TICKS(HttpSendPauseMs));
-        return sent;
-    }
-
-    /** @brief Installiert die Sendebegrenzung vor dem ersten HTTP-Header jeder Verbindung. */
-    esp_err_t openHttpSession(httpd_handle_t server, int socket)
-    {
-        return httpd_sess_set_send_override(server, socket, sendBounded);
+        memset(ip, 0, sizeof(ip));
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        esp_netif_ip_info_t info{};
+        if (netif && esp_netif_get_ip_info(netif, &info) == ESP_OK)
+            memcpy(ip, &info.ip.addr, sizeof(ip));
     }
 
     /** @brief Kodiert genau eine JSON-Antwort mit Cacheverbot. */
@@ -303,18 +289,21 @@ bool WebPortal::begin(AppServices &services, StationManager &stations, uint16_t 
         m_commands = nullptr;
         m_reply.end();
         free(m_stationScratch);
+        free(m_sendBuffer);
         m_pixels = nullptr;
         m_stationScratch = nullptr;
+        m_sendBuffer = nullptr;
     };
     m_services = &services;
     m_stations = &stations;
     m_ftp = ftp;
     m_commands = xQueueCreate(1, sizeof(Command));
     const bool replyReady = m_reply.begin();
-    // Der Aufnahmeplatz gehört dem Aufrufer und wird mit dem USB-Screenshot geteilt, ohne ihn antwortet nur /screenshot mit 503.
+    // Der Aufnahmeplatz gehört dem Aufrufer und wird mit dem USB-Screenshot geteilt, ohne ihn liest die Aufnahme die Zeilen direkt aus dem Bildspeicher.
     m_pixels = pixels;
     m_stationScratch = static_cast<Station *>(heap_caps_malloc(MAX_STATIONS * sizeof(Station), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (!m_commands || !replyReady || !m_stationScratch)
+    m_sendBuffer = static_cast<char *>(heap_caps_malloc(SendBlock, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!m_commands || !replyReady || !m_stationScratch || !m_sendBuffer)
     {
         release();
         return false;
@@ -322,13 +311,11 @@ bool WebPortal::begin(AppServices &services, StationManager &stations, uint16_t 
     for (int i = 0; i < MAX_STATIONS; ++i)
         new (&m_stationScratch[i]) Station{};
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    // Kern 1 mit Priorität 2: Auf Kern 0 mit Priorität 1 kam der Server hinter den beiden Audio-Tasks (Priorität 2) erst Millisekunden später wieder an die Reihe,
-    // jede 2-ms-Pause dauerte im Mittel 4,5 ms. Mit Priorität 5 auf Kern 0 riss der Ton (I2S-Puffer nur 46 ms). Auf Kern 1 verdrängt er nur das Zeichnen, solange er arbeitet.
+    // Kern 1 mit Priorität 2: Auf Kern 0 laufen WLAN und der Decoder von audio-lite, dort wartete der Server mit niedriger Priorität hinter dem Decoder und nähme ihm mit höherer Priorität Rechenzeit. Auf Kern 1 teilt er sich die Zeit mit dem Audiotransport (gleiche Priorität) und verdrängt das Zeichnen, solange er arbeitet.
     config.core_id = 1;
     config.task_priority = 2;
     config.stack_size = 24576;
-    // Stack im PSRAM: Die Handler reichen Aufträge nur an UI- und Dienstworker weiter und dürfen nie selbst in den Flash schreiben (auch nicht die Senderliste,
-    // das übernimmt der Koordinator). Mit dem Cache aus bräche das ESP-IDF sonst ab. Der interne RAM des S3 bleibt für WLAN und TLS.
+    // Stack im PSRAM: Die Handler reichen Aufträge nur an UI- und Dienstworker weiter und dürfen nie selbst in den Flash schreiben (auch nicht die Senderliste, das übernimmt der Koordinator). Mit dem Cache aus bräche das ESP-IDF sonst ab. Der interne RAM des S3 bleibt für WLAN und TLS.
     config.task_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
     config.max_uri_handlers = 4;
     config.max_open_sockets = 5;
@@ -336,7 +323,10 @@ bool WebPortal::begin(AppServices &services, StationManager &stations, uint16_t 
     config.recv_wait_timeout = 3;
     config.send_wait_timeout = 3;
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.open_fn = openHttpSession;
+    config.open_fn = openSession;
+    // Die Sendefunktion bekommt nur das Serverhandle, über den globalen Kontext findet sie dieses Objekt. Ohne eigene Freigabefunktion riefe httpd_stop() dafür free() auf.
+    config.global_user_ctx = this;
+    config.global_user_ctx_free_fn = [](void *) {};
     if (httpd_start(&m_server, &config) != ESP_OK)
     {
         release();
@@ -444,7 +434,8 @@ bool WebPortal::authenticated(httpd_req_t *r)
     // Ohne PIN-Sperre öffnet sich das Portal ohne Anmeldung.
     if (!m_services->pinLockEnabled())
         return true;
-    char cookie[256]{};
+    // So lang wie der Kopfpuffer des Servers: Schickt der Browser für dieselbe Adresse weitere Cookies mit, darf der eigene nicht an der Pufferlänge scheitern.
+    char cookie[CONFIG_HTTPD_MAX_REQ_HDR_LEN + 1]{};
     if (httpd_req_get_hdr_value_str(r, "Cookie", cookie, sizeof(cookie)) != ESP_OK)
         return false;
     const uint32_t generation = m_authGeneration.load();
@@ -478,7 +469,9 @@ bool WebPortal::trusted(httpd_req_t *r, bool post)
     }
     Settings::Configuration config;
     m_services->configuration(config);
-    const bool own = WebValidation::ownHost(host, m_services->networkStatus().ip, config.hostname);
+    uint8_t ip[4];
+    stationAddress(ip);
+    const bool own = WebValidation::ownHost(host, ip, config.hostname);
     mbedtls_platform_zeroize(&config, sizeof(config));
     if (!own)
     {
@@ -501,7 +494,70 @@ bool WebPortal::trusted(httpd_req_t *r, bool post)
 
 esp_err_t WebPortal::handle(httpd_req_t *r)
 {
-    return static_cast<WebPortal *>(r->user_ctx)->route(r);
+    auto *self = static_cast<WebPortal *>(r->user_ctx);
+    self->m_sendUsed = 0;
+    self->m_sendSocket = httpd_req_to_sockfd(r);
+    esp_err_t result = self->route(r);
+    if (result != ESP_OK)
+        self->m_sendUsed = 0;
+    else if (!self->flushSend())
+        result = ESP_FAIL;
+    self->m_sendSocket = -1;
+    return result;
+}
+
+esp_err_t WebPortal::openSession(httpd_handle_t server, int socket)
+{
+    return httpd_sess_set_send_override(server, socket, sendCollected);
+}
+
+int WebPortal::sendCollected(httpd_handle_t server, int socket, const char *bytes, size_t length, int)
+{
+    auto *self = static_cast<WebPortal *>(httpd_get_global_user_ctx(server));
+    const size_t block = std::min(length, SendBlock);
+    // Ein voller Block bei leerem Sammelpuffer braucht keine Kopie.
+    if (socket != self->m_sendSocket || (!self->m_sendUsed && block == SendBlock))
+        return self->sendPaced(socket, bytes, block) ? static_cast<int>(block) : HTTPD_SOCK_ERR_FAIL;
+    const size_t count = std::min(length, SendBlock - self->m_sendUsed);
+    memcpy(self->m_sendBuffer + self->m_sendUsed, bytes, count);
+    self->m_sendUsed += count;
+    if (self->m_sendUsed == SendBlock && !self->flushSend())
+        return HTTPD_SOCK_ERR_FAIL;
+    return static_cast<int>(count);
+}
+
+bool WebPortal::sendPaced(int socket, const char *bytes, size_t length)
+{
+    while (length)
+    {
+        const uint32_t started = millis();
+        while (heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < InternalTransportReserve || heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < 4096)
+        {
+            if (millis() - started >= 3000)
+                return false;
+            vTaskDelay(pdMS_TO_TICKS(2));
+        }
+        const int sent = send(socket, bytes, std::min(length, SendBlock), 0);
+        if (sent <= 0)
+            return false;
+        bytes += sent;
+        length -= sent;
+        // Die Pause folgt der Datenmenge, nicht dem Aufruf: je SendBlock gesendeten Bytes genau eine, der Rest zählt für die nächste Antwort weiter.
+        m_sendUnpaced += sent;
+        if (m_sendUnpaced >= SendBlock)
+        {
+            m_sendUnpaced -= SendBlock;
+            vTaskDelay(pdMS_TO_TICKS(HttpSendPauseMs));
+        }
+    }
+    return true;
+}
+
+bool WebPortal::flushSend()
+{
+    const size_t used = m_sendUsed;
+    m_sendUsed = 0;
+    return !used || sendPaced(m_sendSocket, m_sendBuffer, used);
 }
 
 char *WebPortal::statusJson(bool radio)
@@ -817,7 +873,7 @@ esp_err_t WebPortal::settings(httpd_req_t *r, const char *input)
     int code = 400;
     if (!strcmp(r->uri, "/factoryreset"))
     {
-        // Der Reset setzt nur den Namensraum rr_crowpanel zurück, keine NVS-Gesamtlöschung.
+        // Der Reset betrifft nur eigene Einträge im Namensraum rr_crowpanel: Konfiguration mit WLAN-Profilen und PIN, Radiowerte, Grundfarben von Modern und FTP-Passwort. Die Senderliste und fremde NVS-Daten bleiben.
         double value;
         if (!data)
             code = 400;
@@ -1113,8 +1169,7 @@ esp_err_t WebPortal::stations(httpd_req_t *r, const char *input)
         if (favorites > 10)
             return result(r, 400);
     }
-    // Ohne order alle geänderten URLs markieren, da die lokale Senderwahl während des Speicherns wechseln kann. Mit order darf
-    // sich nichts außer der Reihenfolge ändern, der Koordinator ordnet die Senderwahl erst beim Anwenden neu zu.
+    // Ohne order alle geänderten URLs markieren, da die lokale Senderwahl während des Speicherns wechseln kann. Mit order darf sich nichts außer der Reihenfolge ändern, der Koordinator ordnet die Senderwahl erst beim Anwenden neu zu.
     bool sameStations = true;
     m_stations->withStations([&](const Station *old, int count)
     {
@@ -1131,8 +1186,7 @@ esp_err_t WebPortal::stations(httpd_req_t *r, const char *input)
     });
     if (!sameStations)
         return result(r, 409);
-    // Speichern übernimmt der Koordinator im UI-Task: Der Stack dieses Tasks liegt im PSRAM, beim Flash-Schreiben ist der Cache aus, und das ESP-IDF bricht ab
-    // (Assert esp_task_stack_is_sane_cache_disabled in cache_utils.c). Bis 20.11.2026 startete so jedes Speichern der Senderliste aus dem Web das Gerät neu.
+    // Speichern übernimmt der Koordinator im UI-Task: Der Stack dieses Tasks liegt im PSRAM, beim Flash-Schreiben ist der Cache aus, und das ESP-IDF bricht ab (Assert esp_task_stack_is_sane_cache_disabled in cache_utils.c).
     cmd.stations = m_stationScratch;
     const bool reorder = cmd.reorder;
     const int code = execute(cmd);

@@ -110,20 +110,35 @@ private:
     /** @brief Wartet höchstens 50 ms, bis der Datenkanal beschreibbar bzw. lesbar ist. @param write true beim Senden. @param interruptible Auch auf Eingang des Steuerkanals achten. @return true, wenn Eingang auf dem Steuerkanal wartet. */
     bool waitData(bool write, bool interruptible);
 
+    /** @brief Monotone Zeit in ms aus esp_timer. */
     uint64_t now() override;
+    /** @brief Systemzeit als Unix-Zeit. */
     int64_t wallClock() override;
+    /** @brief Sendet auf dem Steuerkanal über sendControl(). Ein Fehlschlag merkt den Steuerkanal als nicht mehr beschreibbar vor, run() beendet dann die Sitzung. */
     void reply(const char *text) override;
+    /** @brief Fordert die Kartensperre beim UI-Koordinator an und wartet höchstens 2 s auf dessen Antwort. */
     Lease lease() override;
+    /** @brief Gibt die Kartensperre des FTP-Dienstes frei. */
     void release() override;
+    /** @brief Übergibt den Kartenauftrag an den Dienstworker und wartet auf dessen Abschluss. */
     void file(FtpProtocol::Job &job) override;
+    /** @brief Schließt eine vorherige Datenverbindung, öffnet den nächsten freien Port ab FtpProtocol::PassiveFirst und liefert die Adresse des Steuerkanals. */
     bool passive(uint8_t (&ip)[4], uint16_t &port) override;
+    /** @brief Nimmt die Datenverbindung am passiven Port an, nur von der Gegenstelle des Steuerkanals. */
     bool accept() override;
+    /** @brief Sendet in Blöcken von höchstens 1024 Byte mit Pause nach jedem Block und ruht ohne Transportreserve im internen RAM. */
     Data send(const uint8_t *data, size_t length, size_t &sent, bool interruptible) override;
+    /** @brief Liest in Blöcken von höchstens 4096 Byte mit Pause nach jedem Block, ruht ohne Transportreserve im internen RAM und endet mit Radio oder Memory, wenn uploadAllowed() es meldet. */
     Data receive(uint8_t *data, size_t capacity, size_t &received, bool interruptible) override;
+    /** @brief Meldet Radio bei startendem oder laufendem Radiostream, sonst Memory, wenn der größte freie interne DMA-Block unter der Uploadgrenze liegt. */
     Upload uploadAllowed() override;
+    /** @brief Schließt Datenverbindung und passiven Port. */
     void closeData() override;
+    /** @brief Liest ohne Warten die nächste Zeile des Steuerkanals über readLine(). */
     Control poll(char *line) override;
+    /** @brief Gibt den Task für die Zeit ab, mindestens für einen Tick. */
     void wait(uint32_t ms) override;
+    /** @brief Schreibt die Logzeile einer abgeschlossenen Übertragung. */
     void transferred(const char *command, const char *path, const char *reply, uint64_t bytes) override;
 };
 #endif

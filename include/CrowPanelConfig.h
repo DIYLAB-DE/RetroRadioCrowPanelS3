@@ -8,12 +8,14 @@
 /** @brief Versionierter Konfigurationsspeicher im NVS-Namensraum rr_crowpanel, Altprofile bleiben unangetastet. */
 namespace CrowPanelConfig
 {
-    /** @brief Lädt ausschließlich den CRC-geprüften eigenen Radiozustand oder RAM-Vorgaben. */
-    RadioPreferences loadRadio();
+    /** @brief Lädt ausschließlich den CRC-geprüften eigenen Radiozustand oder RAM-Vorgaben. @param stored Erhält true, wenn ein gültiger Eintrag radio_v1 geladen wurde, sonst false. nullptr ohne Rückmeldung. */
+    RadioPreferences loadRadio(bool *stored = nullptr);
     /** @brief Speichert geprüfte Radiowerte atomar in einem eigenen NVS-Schlüssel, den Sender zusätzlich als eigenen Schlüssel radio_station im selben Commit. */
     bool saveRadio(const RadioPreferences &value);
     /** @brief Liest den im NVS gesicherten Sender, der ohne RTC den Neustart überdauert. @param station Senderindex 0..69. @return true bei vorhandenem, gültigem Eintrag. */
     bool loadStation(uint8_t &station);
+    /** @brief Löscht die Schlüssel rr_crowpanel/radio_v1 und rr_crowpanel/radio_station, danach gelten die Vorgaben. Fehlende Schlüssel gelten als Erfolg. @return false bei NVS-Fehler. */
+    bool resetRadio();
 
     /** @brief Zusätzliche eigene Einstellungen, die bestehende WLAN-Struktur bleibt unverändert. */
     struct Extras
@@ -56,5 +58,7 @@ namespace CrowPanelConfig
     bool loadFtpPassword(char (&out)[FtpProtocol::PasswordCapacity]);
     /** @brief Schreibt ein FTP-Passwort nach rr_crowpanel/ftp_v1, config_v2 und die Geräte-PIN bleiben unberührt. @return false bei ungültigem Passwort (FtpProtocol::validPassword) oder NVS-Fehler. */
     bool saveFtpPassword(const char *password);
+    /** @brief Löscht nur den Schlüssel rr_crowpanel/ftp_v1. Das nächste Einschalten von FTP erzeugt ein neues Passwort. Ein fehlender Schlüssel gilt als Erfolg. @return false bei NVS-Fehler. */
+    bool resetFtpPassword();
 }
 #endif

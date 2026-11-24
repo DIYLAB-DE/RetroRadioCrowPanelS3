@@ -453,6 +453,7 @@ private:
     bool m_playing = false; ///< Frisches PCM der aktiven Radio- oder SD-Quelle.
     CanvasDamage m_canvasDamage{{}, 0, true}; ///< Begrenzt PSRAM-Vergleich und Kopien auf gezeichnete Flächen
 
+    /** @brief Verwirft die gemerkten Rechtecke und merkt die ganze Fläche als gezeichnet vor. */
     void markCanvasFull()
     {
         m_canvasDamage.count = 0;

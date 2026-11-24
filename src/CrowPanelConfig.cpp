@@ -5,6 +5,7 @@
 #include <esp_mac.h>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <mbedtls/platform_util.h>
 
 namespace
@@ -412,9 +413,11 @@ namespace
     }
 }
 
-RadioPreferences CrowPanelConfig::loadRadio()
+RadioPreferences CrowPanelConfig::loadRadio(bool *stored)
 {
     RadioPreferences value;
+    if (stored)
+        *stored = false;
     nvs_handle_t handle;
     if (nvs_open("rr_crowpanel", NVS_READONLY, &handle) != ESP_OK)
         return value;
@@ -437,7 +440,11 @@ RadioPreferences CrowPanelConfig::loadRadio()
         return RadioPreferences{};
     value.muted = blob[18];
     value.beforeMute = blob[19] ? blob[19] : 10;
-    return validRadio(value) ? value : RadioPreferences{};
+    if (!validRadio(value))
+        return RadioPreferences{};
+    if (stored)
+        *stored = true;
+    return value;
 }
 
 bool CrowPanelConfig::saveRadio(const RadioPreferences &value)
@@ -462,6 +469,31 @@ bool CrowPanelConfig::saveRadio(const RadioPreferences &value)
     const bool ok = nvs_set_blob(handle, "radio_v1", blob, sizeof(blob)) == ESP_OK && nvs_set_u8(handle, "radio_station", value.station) == ESP_OK && nvs_commit(handle) == ESP_OK;
     nvs_close(handle);
     return ok;
+}
+
+namespace
+{
+    /** @brief Löscht Schlüssel des Namensraums rr_crowpanel in einem Commit. Fehlende Schlüssel gelten als Erfolg. @return false bei NVS-Fehler. */
+    bool eraseKeys(std::initializer_list<const char *> keys)
+    {
+        nvs_handle_t nvs;
+        if (nvs_open("rr_crowpanel", NVS_READWRITE, &nvs) != ESP_OK)
+            return false;
+        bool ok = true;
+        for (const char *key : keys)
+        {
+            const esp_err_t result = nvs_erase_key(nvs, key);
+            ok = ok && (result == ESP_OK || result == ESP_ERR_NVS_NOT_FOUND);
+        }
+        ok = ok && nvs_commit(nvs) == ESP_OK;
+        nvs_close(nvs);
+        return ok;
+    }
+}
+
+bool CrowPanelConfig::resetRadio()
+{
+    return eraseKeys({"radio_v1", "radio_station"});
 }
 
 bool CrowPanelConfig::loadStation(uint8_t &station)
@@ -617,6 +649,11 @@ bool CrowPanelConfig::saveFtpPassword(const char *password)
     }
     mbedtls_platform_zeroize(blob, sizeof(blob));
     return ok;
+}
+
+bool CrowPanelConfig::resetFtpPassword()
+{
+    return eraseKeys({"ftp_v1"});
 }
 
 bool CrowPanelConfig::resetModern()

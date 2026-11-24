@@ -93,6 +93,8 @@ bool FtpSession::command(const char *line)
         m_hasDeferred = false;
         open = execute(m_line);
     }
+    // Die Leerlauffrist beginnt mit dem Ende des Befehls: Eine Übertragung, die länger dauert als die Frist, gälte sonst direkt danach als Leerlauf.
+    m_lastActivity = m_env.now();
     // Die Zeile kann ein Passwort enthalten.
     FtpProtocol::wipe(m_line, sizeof(m_line));
     return open;

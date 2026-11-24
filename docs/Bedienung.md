@@ -27,7 +27,7 @@ Links wählst Du die Seite, rechts bearbeitest Du deren Werte. **speichern** üb
 | Anzeige | Magisches Auge, VU-Trägheit und Bezugspegel | [![Anzeige](bilder/bedienung/einstellungen-anzeige-klein.png)](bilder/bedienung/einstellungen-anzeige.png) |
 | Thema | Retro, E-Paper oder Individuell | [![Themen](bilder/bedienung/einstellungen-thema-klein.png)](bilder/bedienung/einstellungen-thema.png) |
 | Bildschirm | Helligkeit und feste Drehung um 180° | [![Bildschirm](bilder/bedienung/einstellungen-bildschirm-klein.png)](bilder/bedienung/einstellungen-bildschirm.png) |
-| Info & Neustart | Geräte- und Netzwerkdaten, RTC-Erkennung, Neustart und Zurücksetzen | [![Geräteinformation mit v26.11.22](bilder/bedienung/einstellungen-info-klein.png)](bilder/bedienung/einstellungen-info.png) |
+| Info & Neustart | Geräte- und Netzwerkdaten, RTC-Erkennung, Neustart und Zurücksetzen | [![Geräteinformation mit v26.11.24](bilder/bedienung/einstellungen-info-klein.png)](bilder/bedienung/einstellungen-info.png) |
 
 ### WLAN
 
@@ -75,8 +75,8 @@ Zum Ändern der PIN öffnest Du den PIN-Dialog, gibst vier neue Ziffern ein und 
 
 ## Neustart und Zurücksetzen
 
-**Info & Neustart** zeigt unter anderem Firmwareversion, Speicher, Netzwerkdaten und die gefundenen I2C-Adressen. Eine angeschlossene DS1307 erscheint als `0x68`. Weitere Angaben zur Uhr stehen unter [Gerät und Anschlüsse](Geräte-und-Anschlüsse.md#optionale-uhr).
+**Info & Neustart** zeigt unter anderem Firmwareversion, Speicher, Netzwerkdaten und die gefundenen I2C-Adressen. Die Zeile **FTP** zeigt „aus“ oder bei eingeschaltetem FTP die Adresse, zum Beispiel `ftp://crow@192.168.178.123`. Eine angeschlossene DS1307 erscheint als `0x68`. Weitere Angaben zur Uhr stehen unter [Gerät und Anschlüsse](Geräte-und-Anschlüsse.md#optionale-uhr).
 
-Ein **Neustart** lädt den gespeicherten Zustand erneut. **Zurücksetzen** zeigt eine Bestätigungsfrage und setzt danach die Konfiguration einschließlich der WLAN-Profile auf die Vorgaben zurück. Anschließend startet das Gerät neu. Die Senderliste wird getrennt verwaltet. Zurücksetzen ist kein notwendiger Schritt bei einem normalen Firmwareupdate. Das Leeren einer SD-Titelliste ist davon unabhängig und entfernt keine Musikdateien von der Karte.
+Ein **Neustart** lädt den gespeicherten Zustand erneut. **Zurücksetzen** zeigt eine Bestätigungsfrage und setzt danach die Konfiguration einschließlich der WLAN-Profile und der PIN auf die Vorgaben zurück. Gelöscht werden dabei auch die gesicherten Radiowerte (Lautstärke, Klangregler, Senderwahl und Visualisierung), die eigenen Farben des Themas Individuell und das FTP-Passwort. Anschließend startet das Gerät neu. Die Senderliste bleibt erhalten, sie wird getrennt verwaltet. Zurücksetzen ist kein notwendiger Schritt bei einem normalen Firmwareupdate. Das Leeren einer SD-Titelliste ist davon unabhängig und entfernt keine Musikdateien von der Karte.
 
 [RetroRadioCrowPanelS3](../README.md) > [Dokumentation](../README.md#dokumentation) > Bedienung

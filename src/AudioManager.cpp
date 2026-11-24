@@ -13,9 +13,7 @@ namespace
     constexpr int16_t MONO_TOLERANCE_THRESHOLD = 4;
     constexpr int32_t INT16_MIN_AS_INT32 = -32768;
     constexpr int32_t INT16_MAX_AS_INT32 = 32767;
-    // 40 KiB I2S-DMA, rund 116 ms Kapazität bei 44,1 kHz.
-    // Mit 12 Puffern traten unter Grafiklast hörbare Aussetzer auf. Der damalige Nullzähler
-    // war wegen eines nicht registrierten ISR-Callbacks kein belastbarer Gegenbeleg.
+    // 40 KiB I2S-DMA, rund 116 ms Kapazität bei 44,1 kHz. Mit 12 Puffern (70 ms) traten unter Grafiklast hörbare Aussetzer auf.
     constexpr uint16_t I2sDmaDescriptors = 20;
     constexpr uint16_t I2sDmaFrames = 256;
     constexpr uint32_t PcmGapMarginMs = 10; ///< Zuschlag in ms, ab dem ein verspäteter PCM-Block als Lücke zählt

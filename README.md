@@ -46,7 +46,7 @@ Die Tonausgabe erfolgt über einen NS4168 an einem Lautsprecheranschluss in **Mo
 | Browser und Dateien | [Weboberfläche und FTP](docs/Weboberfläche.md) |
 | Hardware | [Gerät und Anschlüsse](docs/Geräte-und-Anschlüsse.md) |
 | Probleme eingrenzen | [Fehlerhilfe](docs/Fehlerhilfe.md) |
-| Stand und Herkunft | [Änderungen](docs/Änderungen.md), [Lizenzen und Herkunft](docs/LIZENZEN.md) |
+| Versionen und Herkunft | [Änderungen](docs/Änderungen.md), [Lizenzen und Herkunft](docs/LIZENZEN.md) |
 
 ## Quellcode bauen
 

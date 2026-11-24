@@ -32,8 +32,8 @@ namespace SettingsLayout
         constexpr int FOOTER_Y = VIEWPORT_H;
         constexpr int MENU_X = 2;
         constexpr int MENU_W = 170;
-        constexpr int SECTION_ROW_H = 28;                     ///< Sektionskopf. Zwei Köpfe und zehn Einträge füllen 416 der 424 Pixel über der Fußzeile
-        constexpr int ITEM_ROW_H = 36;                        ///< Höhe eines Menüeintrags, die Beschriftung bleibt einzeilig
+        constexpr int SECTION_ROW_H = 30;                     ///< Sektionskopf, Original 28. Die Menüspalte reicht neben der Fußzeile bis zum unteren Rand, zwei Köpfe und zehn Einträge füllen die Bildschirmhöhe (2 x 30 + 10 x 42 = 480)
+        constexpr int ITEM_ROW_H = 42;                        ///< Höhe eines Menüeintrags, Original 36, die Beschriftung bleibt einzeilig
         constexpr int ITEM_ACCENT_W = 4;                      ///< Kategoriestreifen
         constexpr int ITEM_TEXT_X = ITEM_ACCENT_W + 6;
         constexpr int SCROLLBAR_X = MENU_X + MENU_W + 4;
@@ -243,12 +243,12 @@ namespace SettingsLayout
         constexpr int COL_W = (Content::W - COL_GAP) / 2;
         constexpr int HDR_H = 26;
         constexpr int HDR_PAD_X = 10;
-        constexpr int ROWS_GAP = 4;        ///< Erste Zeile unter dem Kopf
-        constexpr int ROW_H = 28;
+        constexpr int ROWS_GAP = 2;        ///< Erste Zeile unter dem Kopf, Original 4
+        constexpr int ROW_H = 26;          ///< Original 28. Die linke Spalte hat mit FTP zehn Zeilen, das Original neun. Mit 28 Pixel ragt die zehnte in die I2C-Zeile, mit 26 bleiben 6 Pixel bis zum I2C-Badge
         constexpr int ROW_PAD_X = 8;
         constexpr int I2C_LABEL_GAP = 10;
-        constexpr int I2C_BOTTOM_GAP = 10;
-        constexpr int I2C_BADGE_Y = 1;
+        constexpr int I2C_BOTTOM_GAP = 8;  ///< Original 10
+        constexpr int I2C_BADGE_Y = 0;     ///< Original 1. Das Badge ist mit HDR_H so hoch wie die Zeile, seine Beschriftung steht auf der Höhe der Adressliste
         constexpr int SIGNAL_W = 80;
         constexpr int SIGNAL_H = 8;
         constexpr int SIGNAL_R = 2;

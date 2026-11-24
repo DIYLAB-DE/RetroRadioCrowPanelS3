@@ -102,6 +102,10 @@ private:
     uint32_t m_uploadId = 0, m_uploadSize = 0, m_uploaded = 0, m_uploadGeneration = 0; ///< Laufender Upload: Kennung, erwartete und empfangene Bytes, Sitzungsgeneration
     std::atomic<uint32_t> m_authGeneration{1};                   ///< Steigt bei jeder Entwertung der Sitzungen
     std::atomic<bool> m_shotBusy{false};                         ///< Aufnahmeplatz belegt, siehe shotBusy()
+    static constexpr size_t SendBlock = 1024;                    ///< Größe eines Sendeblocks in Bytes, nach je einem gesendeten Block folgt die Sendepause
+    char *m_sendBuffer = nullptr;                                ///< Sammelpuffer der laufenden Antwort mit SendBlock Bytes im PSRAM, nur im HTTP-Task
+    size_t m_sendUsed = 0, m_sendUnpaced = 0;                    ///< Belegte Bytes im Sammelpuffer und seit der letzten Sendepause gesendete Bytes
+    int m_sendSocket = -1;                                       ///< Socket der Antwort, die gerade gesammelt wird, -1 außerhalb eines Handlers
 
     /** @brief Angemeldete Websitzung. */
     struct Session
@@ -110,8 +114,16 @@ private:
         uint32_t generation = 0, created = 0; ///< Gültige Generation und Erstellzeit in ms, Sitzungen gelten höchstens 30 Minuten
     } m_sessions[3];
 
-    /** @brief Verarbeitet HTTP ausschließlich im Server-Task auf Core 0. */
+    /** @brief Verarbeitet HTTP ausschließlich im Server-Task: sammelt die Sendeaufrufe der Antwort in m_sendBuffer und sendet den Rest, sobald route() fertig ist. Nach einem Fehler des Handlers verfällt der Rest, der Server schließt die Verbindung dann ohnehin. */
     static esp_err_t handle(httpd_req_t *request);
+    /** @brief Richtet für jede neue Verbindung sendCollected() als Sendefunktion ein. */
+    static esp_err_t openSession(httpd_handle_t server, int socket);
+    /** @brief Sendefunktion des Servers für alle Verbindungen. esp_http_server gibt jede Kopfzeile in vier und jeden Chunk in drei einzelnen Aufrufen ab. Innerhalb eines Handlers fasst die Funktion sie zu Blöcken von SendBlock Bytes zusammen, ein voller Block geht sofort hinaus. Antworten des Servers außerhalb eines Handlers (Fehlerantworten vor der Zuordnung) haben kein Ende, an dem ein Rest gesendet würde, sie gehen ungesammelt hinaus. @return Zahl der übernommenen Bytes, höchstens SendBlock, oder HTTPD_SOCK_ERR_FAIL. */
+    static int sendCollected(httpd_handle_t server, int socket, const char *bytes, size_t length, int flags);
+    /** @brief Sendet Bytes vollständig in Blöcken von höchstens SendBlock Bytes. Wartet vor jedem Block bis zu 3 s auf die Transportreserve im internen RAM und pausiert nach je SendBlock gesendeten Bytes. Die Pause begrenzt die Senderate großer Antworten, damit die höherpriorisierte WLAN- und lwIP-Arbeit auf Kern 0 den Audiodecoder nicht verdrängt. Kleine Antworten bleiben ohne Pause. @return false bei Sendefehler oder fehlender Reserve. */
+    bool sendPaced(int socket, const char *bytes, size_t length);
+    /** @brief Sendet den Rest des Sammelpuffers an m_sendSocket. @return false bei Sendefehler. */
+    bool flushSend();
     /** @brief Verteilt eine Anfrage nach Pfad und Methode auf die Endpunkte, prüft Ursprung und Sitzung. */
     esp_err_t route(httpd_req_t *request);
     /** @brief Kopiert den zuletzt veröffentlichten Zustand. */

@@ -948,8 +948,7 @@ void RetroRadio::setState(const State &state)
         next.bitRate = 0;
         next.codec = AudioManager::Codec::None;
     }
-    // Eine Senderwahl, die beim Wechsel der Senderliste noch auf die Nadel wartet, gilt mit der neuen Liste weiter. Bisher verwarf cancelPendingStart sie,
-    // und das Radio blieb ohne Meldung stumm, wenn die Liste während der Zeigerfahrt gespeichert wurde (seit der sofortigen Antwort auf den Web-Senderwechsel auch allein über das Webportal).
+    // Eine Senderwahl, die beim Wechsel der Senderliste noch auf die Nadel wartet, gilt mit der neuen Liste weiter. cancelPendingStart allein verwürfe sie, das Radio bliebe ohne Meldung stumm, wenn die Liste während der Zeigerfahrt gespeichert wird.
     const bool reselect = m_haveState && next.stationsRevision != m_state.stationsRevision && m_allowStart;
     if (m_haveState && next.stationsRevision != m_state.stationsRevision)
     {

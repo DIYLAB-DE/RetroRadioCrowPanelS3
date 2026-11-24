@@ -67,7 +67,7 @@ public:
     virtual Data send(const uint8_t *data, size_t length, size_t &sent, bool interruptible) = 0;
     /** @brief Liest bis capacity Byte vom Datenkanal. @param received Gelesene Byte, 0 mit Ok heißt Ende des Datenstroms. @param interruptible Wie bei send(). @return Radio, sobald uploadAllowed() Radio meldet. Memory, wenn uploadAllowed() zu lange Memory meldet. */
     virtual Data receive(uint8_t *data, size_t capacity, size_t &received, bool interruptible) = 0;
-    /** @brief Meldet, ob Uploaddaten angenommen werden können. STOR beginnt sonst nicht. Ein Radiostream schließt Uploads aus: Gleichzeitig mit Kartenschreiben ließ er die Empfangspuffer von esp_hosted so wachsen, dass im internen DMA-Speicher nach 18 bis 100 MB kein zusammenhängender Block für den nächsten Wachstumsschritt mehr frei war. Ohne Radio seit dem Start reichte der Block nach 150 MB noch. */
+    /** @brief Meldet, ob Uploaddaten angenommen werden können. STOR beginnt sonst nicht. Ein Radiostream schließt Uploads aus, weil Stream und Uploaddaten zugleich die Empfangspuffer des WLAN im internen RAM belegen. Ohne Radio entscheidet der größte freie interne DMA-Block. */
     virtual Upload uploadAllowed() = 0;
     /** @brief Schließt Datenverbindung und passiven Port. */
     virtual void closeData() = 0;
@@ -191,7 +191,7 @@ private:
     bool m_passive = false;                    ///< Passiver Datenport ist offen
     unsigned m_failures = 0;                   ///< Fehlgeschlagene Anmeldungen dieser Verbindung
     uint64_t m_rest = 0;                       ///< Versatz aus REST für den nächsten RETR
-    uint64_t m_started = 0, m_lastActivity = 0; ///< Beginn der Verbindung und letzter Befehl in ms
+    uint64_t m_started = 0, m_lastActivity = 0; ///< Beginn der Verbindung und Beginn oder Ende des letzten Befehls in ms
     WebValidation::LoginLock m_lock;           ///< Mindestabstand und wachsende Sperre nach Fehlversuchen, über alle Verbindungen
     Transfer m_transfer = Transfer::None;      ///< Laufende Übertragung
     uint64_t m_bytes = 0;                      ///< Bytes der laufenden oder letzten Übertragung

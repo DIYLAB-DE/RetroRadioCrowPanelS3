@@ -29,6 +29,7 @@
 #include "WebPortal.h"
 #include "FtpService.h"
 #include <esp_ota_ops.h>
+#include <esp_wifi.h>
 #include <driver/temperature_sensor.h>
 // Die Firmware-Kennung kommt über das Build-Flag FW_VERSION (scripts/fw_version.py).
 #ifndef FW_VERSION
@@ -67,7 +68,7 @@ namespace
         Sd
     };
 
-    /** @brief Legt ein großes, langlebiges Objekt im PSRAM an, damit der knappe interne RAM des S3 für WLAN, TLS, I2S und Kartentreiber bleibt. PSRAM steht schon vor den globalen Konstruktoren bereit (CONFIG_SPIRAM_BOOT_INIT), ohne PSRAM wird das Objekt intern angelegt. Nur für Klassen ohne atomare Elemente und Sperren. */
+    /** @brief Legt ein großes, langlebiges Objekt im PSRAM an, damit der knappe interne RAM des S3 für WLAN, TLS, I2S und Kartentreiber bleibt. PSRAM steht schon vor den globalen Konstruktoren bereit (CONFIG_SPIRAM_BOOT_INIT), ohne PSRAM wird das Objekt intern angelegt. Nur für Klassen ohne atomare Elemente und ohne Spinlocks. Das std::mutex des StationManager wird nur aus Tasks gesperrt. */
     template <typename T>
     T &psramObject()
     {
@@ -340,6 +341,33 @@ namespace
         s_beforeMute = RadioPreferences::returnVolume(volume, s_beforeMute);
         g_audioManager.setVolume(s_volume);
         g_audioManager.setLoudnessVolume(s_volume);
+    }
+
+    /** @brief Liefert den ersten Favoriten mit Adresse, 0 ohne Favoriten. Senderwahl eines Geräts ohne gesicherten Sender. */
+    int firstPresetStation()
+    {
+        for (int i = 0; i < s_stations.getStationCount(); ++i)
+        {
+            Station station;
+            if (s_stations.getStation(i, station) && station.preset && station.url[0])
+                return i;
+        }
+        return 0;
+    }
+
+    /** @brief Setzt den Radiozustand der Bedienung auf den Stand eines Geräts ohne gesicherte Radiowerte: Vorgaben für Balance, Klang, Modus und Stile, leiser Startpegel, nicht stumm, erster Favorit. rememberRadioState() gibt ihn im selben Schleifendurchlauf an den Dienst, mit DS1307 steht er vor dem Neustart in deren NVRAM. Nur nach dem Zurücksetzen aller Einstellungen, dem ein Neustart folgt. */
+    void resetRadioState()
+    {
+        const RadioPreferences defaults;
+        setVolume(std::min(defaults.volume, AudioManager::DefaultVolume));
+        s_userMuted = false;
+        s_balance = defaults.balance;
+        memcpy(s_tone, defaults.tone, sizeof(s_tone));
+        s_visualizer.applyPreferences(defaults);
+        g_audioManager.setBalance(s_balance);
+        g_audioManager.setTone(s_tone[0], s_tone[1], s_tone[2]);
+        s_selectedStation = firstPresetStation();
+        s_lastStatus = 0;
     }
 
     /** @brief Merkt den zentralen Radiozustand aus allen Bedienwegen ohne I/O, der Dienst fasst tatsächliche Änderungen zusammen. */
@@ -841,6 +869,9 @@ namespace
                 }
                 else if (result.outcome == Settings::Outcome::Success)
                 {
+                    // Der Dienst hat die gesicherten Radiowerte schon gelöscht. Ohne diesen Schritt schriebe rememberRadioState() den bisherigen Stand vor dem Neustart zurück.
+                    if (result.type == T::ResetDefaults)
+                        resetRadioState();
                     s_config = result.config;
                     s_web.invalidateSessions();
                     s_settings.setConfiguration(s_config, result.revision);
@@ -1081,9 +1112,7 @@ namespace
                     code = 200;
                 else
                 {
-                    // Antwort, sobald die Radioansicht die Auswahl übernommen hat. Zeigerfahrt und Senderstart laufen danach wie bei
-                    // einer Auswahl am Display. Bis 20.11.2026 wartete die Antwort auf den laufenden Stream (bis 4,6 s gemessen), der einzige HTTP-Task
-                    // beantwortete so lange keine Statusabfrage, und die Webnadel lief zum alten Sender zurück.
+                    // Antwort, sobald die Radioansicht die Auswahl übernommen hat. Zeigerfahrt und Senderstart laufen danach wie bei einer Auswahl am Display. Wartete die Antwort auf den laufenden Stream (bis 4,6 s gemessen), beantwortete der einzige HTTP-Task so lange keine Statusabfrage, und die Webnadel liefe zum alten Sender zurück.
                     radioAction(s_radio.selectStation(command.values[0], millis()));
                     if (s_radioFailed)
                         code = 503;
@@ -1562,7 +1591,6 @@ namespace
             LOG_PLAIN_F("FTP_USB INVALID");
     }
 
-    /** @brief Protokolliert den Stand der Ausgabe (Zeile CODEC). Das CrowPanel hat keinen Codec, der NS4168 hat keine Register, stumm heißt Nullsamples. */
     /** @brief Testton per USB: \@ton:<Hz>:<dBFS> ersetzt die laufende Ausgabe hinter Lautstärke und Klangregelung durch einen Sinus mit festem Spitzenpegel, \@ton:aus blendet ihn aus. Klingt nur, solange Radio oder SD-Player spielen. */
     void receiveTone(const char *line)
     {
@@ -1581,6 +1609,7 @@ namespace
         LOG_PLAIN_F("TON Hz=%u dBFS=%.1f Wiedergabe=%d", hz, hz ? dbfs : -999.0f, static_cast<int>(status.state));
     }
 
+    /** @brief Protokolliert den Stand der Ausgabe (Zeile CODEC). Das CrowPanel hat keinen Codec, der NS4168 hat keine Register, stumm heißt Nullsamples. */
     void logCodecRegisters()
     {
         bool speaker = false;
@@ -1774,6 +1803,12 @@ namespace
                         snprintf(client, sizeof(client), "%u.%u.%u.%u", ftp.clientIp[0], ftp.clientIp[1], ftp.clientIp[2], ftp.clientIp[3]);
                     LOG_PLAIN_F("FTP Schalter=%u Lauscht=%u Adresse=%u.%u.%u.%u:%u Benutzer=%s Passwort=%s Client=%s Angemeldet=%u Transfer=%s Bytes=%llu Sitzungen=%lu Abgewiesen=%lu Fehlanmeldungen=%lu Uebertragungen=%lu Sperre=%s Stack=%lu", ftp.enabled, ftp.listening, ftp.ip[0], ftp.ip[1], ftp.ip[2], ftp.ip[3], ftp.port, FtpProtocol::User, ftp.password ? "gesetzt" : "fehlt", client, ftp.loggedIn, FtpService::transferName(ftp.transfer), static_cast<unsigned long long>(ftp.bytes), static_cast<unsigned long>(ftp.sessions), static_cast<unsigned long>(ftp.rejected), static_cast<unsigned long>(ftp.failedLogins), static_cast<unsigned long>(ftp.transfers), lease, static_cast<unsigned long>(ftp.stackFree));
                 }
+                {
+                    // Gemeldet wird der Wert des Treibers (0 aus, 1 Modem-Sleep). Arduino führt die Stromsparart getrennt und kann davon abweichen.
+                    wifi_ps_type_t powerSave = WIFI_PS_NONE;
+                    if (esp_wifi_get_ps(&powerSave) == ESP_OK)
+                        LOG_PLAIN_F("WLAN Stromsparart=%d", static_cast<int>(powerSave));
+                }
                 LOG_PLAIN_F("HEAP DMAfrei=%u DMABlock=%u DMAminimum=%u InternBlock=%u PSRAMBlock=%u PSRAMminimum=%u", static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)), static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)), static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)), static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)), static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)), static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM)));
                 // Der ESP-IDF-Wert zählt Bytes, die seit dem Start nie als Stack benutzt wurden.
                 const auto stackReserve = [](const char *name) -> unsigned
@@ -1790,12 +1825,7 @@ namespace
 #endif
 }
 
-/**
- * @brief Zuteiler für mbedTLS mit Transportreserve im internen RAM. Die Arduino-Bibliotheken legen mbedTLS sonst ganz in den internen RAM
- * (CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC). Große Blöcke ab 8 KB (Record-Puffer, über die die Entschlüsselung läuft) bleiben intern, solange Platz ist, damit die
- * AES-Zugriffe nicht den PSRAM-Bus der RGB-DMA belasten. Dabei bleibt die Transportreserve des Webportals frei.
- * Kleinere Blöcke und große Blöcke, die diese Reserve verbrauchen würden, gehen in den PSRAM.
- */
+/** @brief Zuteiler für mbedTLS mit Transportreserve im internen RAM. Die Arduino-Bibliotheken legen mbedTLS sonst ganz in den internen RAM (CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC). Große Blöcke ab 8 KB (Record-Puffer, über die die Entschlüsselung läuft) bleiben intern, solange Platz ist, damit die AES-Zugriffe nicht den PSRAM-Bus der RGB-DMA belasten. Dabei bleibt die Transportreserve des Webportals frei. Kleinere Blöcke und große Blöcke, die diese Reserve verbrauchen würden, gehen in den PSRAM. */
 static void *mbedtlsCalloc(size_t n, size_t size)
 {
     constexpr size_t InternalThreshold = 8192;
@@ -1866,15 +1896,7 @@ void setup()
     }
     LOG_INFO_F("CHIPTEMPERATUR Sensor=%s", s_chipTemp ? "bereit" : "FEHLER");
     s_stations.loadStations();
-    for (int i = 0; i < s_stations.getStationCount(); ++i)
-    {
-        Station station;
-        if (s_stations.getStation(i, station) && station.preset && station.url[0])
-        {
-            s_selectedStation = i;
-            break;
-        }
-    }
+    s_selectedStation = firstPresetStation();
     // Vor jedem begin(), das Farben in Sprites oder Symbolcaches einbrennt. Ein Wechsel wirkt nach dem Neustart.
     ModernFarben modern;
     const bool modernStored = CrowPanelConfig::loadModern(modern);
@@ -1990,9 +2012,7 @@ void loop()
     }
     const uint32_t now = millis();
     const auto &touch = updateTouch();
-    // Während einer Bildschirmaufnahme oder der USB-Zeichenpause ruhen Zeichnen und Bedienung, die Anzeige steht still.
-    // Audio, Dienste und Webaufträge laufen weiter. Ein Kontakt von vor der Sperre wird abgebrochen,
-    // jeder Kontakt während der Sperre bis zum Loslassen übergangen.
+    // Während einer Bildschirmaufnahme oder der USB-Zeichenpause ruhen Zeichnen und Bedienung, die Anzeige steht still. Audio, Dienste und Webaufträge laufen weiter. Ein Kontakt von vor der Sperre wird abgebrochen, jeder Kontakt während der Sperre bis zum Loslassen übergangen.
 #if CROWPANEL_USB_FERNSTEUERUNG
     const bool gfxBlocked = s_web.shotBusy() || s_screenshot.active() || s_drawingPaused;
 #else

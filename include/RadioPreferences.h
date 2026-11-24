@@ -5,7 +5,7 @@
 /** @brief Kleiner Radiodatensatz ohne Zugangsdaten und Hardwareparameter. CrowPanelConfig sichert alles im NVS, CrowPanelRtc sichert station, Lautstärke, Stummschaltung, Modus und Stile im NVRAM einer DS1307. Mit DS1307 gelten deren Werte. */
 struct RadioPreferences
 {
-    static constexpr uint8_t DefaultVolume = 30; ///< Pegel nach dem Reset der Radioansicht und auf einem Gerät ohne gespeicherte Radiowerte, beim Start begrenzt CrowPanelRtc::loadRadio ihn ohne gültigen RTC-Wert auf AudioManager::DefaultVolume
+    static constexpr uint8_t DefaultVolume = 30; ///< Pegel nach dem Reset der Radioansicht und auf einem Gerät ohne gespeicherte Radiowerte, beim Start begrenzt CrowPanelRtc::loadRadio ihn ohne gültigen RTC-Wert und ohne gesicherten Eintrag radio_v1 auf AudioManager::DefaultVolume
     uint8_t mode = 0, styles[8]{0, 1, 1, 0, 1, 1, 1, 0}, volume = DefaultVolume; ///< Visualizermodus 0..7 (Vorgabe Analog-VU), Stil 0/1 je Modus (Analog-VU, Digital-VU, Spektrum, Wellenform, Goniometer, zentriertes Spektrum, Wasserfall, Aurora): Regenbogen überall, wo es ihn gibt (beim Goniometer nur im VU-Balken, die Figur bleibt einfarbig). Analog-VU klassisch, Wellenform überlagert, Nordlicht kühl. Der Visualizer übernimmt sie beim Start über applyPreferences, seine Membervorgaben gelten nur davor. Lautstärke 0..100
     int8_t tone[3]{10, 1, 10}, balance = 0;    ///< Klangbänder tief, mittel, hoch in dB (-12..12) mit den Reset-Vorgaben, Balance -16..16
     bool muted = false;                         ///< Stummgeschaltet

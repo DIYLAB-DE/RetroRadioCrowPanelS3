@@ -268,6 +268,7 @@ private:
     {
         int x, y, w, h;
 
+        /** @brief Prüft, ob der Punkt im Rechteck liegt, rechte und untere Kante gehören nicht dazu. */
         bool contains(int px, int py) const
         {
             return px >= x && py >= y && px < x + w && py < y + h;

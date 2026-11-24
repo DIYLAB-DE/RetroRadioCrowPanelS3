@@ -50,7 +50,7 @@ Unter **System** bearbeitest Du Zeitzone, Zeitserver, Synchronisationsintervall,
 
 [![Systemeinstellungen](bilder/web/web-system-klein.png)](bilder/web/web-system.png)
 
-Die PIN-Sperre, die PIN und der Sekundenzeiger haben eigene Bedienelemente. Diese Änderungen sind von der allgemeinen Speichertaste getrennt. **Neu starten** startet nur die Firmware neu. **Werkseinstellungen** setzt gespeicherte Einstellungen nach Rückfragen zurück, sichere vorher Deine Senderliste und notiere die notwendigen WLAN-Daten.
+Die PIN-Sperre, die PIN und der Sekundenzeiger haben eigene Bedienelemente. Diese Änderungen sind von der allgemeinen Speichertaste getrennt. **Neu starten** startet nur die Firmware neu. **Werkseinstellungen** setzt nach Rückfragen die gespeicherten Einstellungen einschließlich WLAN-Profilen und PIN zurück und löscht die gesicherten Radiowerte, die eigenen Farben des Themas Individuell und das FTP-Passwort. Die Senderliste bleibt erhalten. Notiere vorher die notwendigen WLAN-Daten, danach ist das Gerät erst nach der Einrichtung am Display wieder im Netz.
 
 Zum Ausschalten der PIN-Sperre gibst Du die bisherige PIN ein und bestätigst **Ausschalten**. Zum Ändern trägst Du alte und neue PIN ein und drückst die zugehörige Speichertaste. Der Sekundenzeiger wechselt sofort zwischen schleichender Bewegung und Sekundenschritten.
 
@@ -74,7 +74,7 @@ Beende für die Dateiverwaltung zuerst Radio und SD-Wiedergabe. **Dateien** zeig
 
 Laufende oder angeforderte SD-Wiedergabe sowie andere Dateiübertragungen können die Karte belegen. Das Portal zeigt den Grund an, wenn eine Aktion gerade nicht verfügbar ist. Beende den konkurrierenden Zugriff und aktualisiere die Dateiliste. Schließe Dateiverbindungen, bevor Du die SD-Wiedergabe wieder startest.
 
-FTP wird oben im Dateimanager eingeschaltet. Adresse, Port, Benutzername und Passwort stehen daneben. Das Passwort ist zunächst verdeckt, die Schaltflächen erlauben Anzeigen und Kopieren. **Neues Passwort** ersetzt das bisherige und trennt eine angemeldete FTP-Verbindung. Nach einem Neustart ist FTP wieder ausgeschaltet.
+FTP wird oben im Dateimanager eingeschaltet. Adresse, Port, Benutzername und Passwort stehen daneben. Das Passwort ist zunächst verdeckt, die Schaltflächen erlauben Anzeigen und Kopieren. **Neues Passwort** ersetzt das bisherige und trennt eine angemeldete FTP-Verbindung. Nach einem Neustart ist FTP wieder ausgeschaltet. Am Gerät zeigt **Einstellungen -> Info & Neustart** in der Zeile **FTP** bei eingeschaltetem FTP die Adresse, sonst „aus“.
 
 Für einen FTP-Client gelten **Port 21**, **Passivmodus (PASV/EPSV)**, unverschlüsseltes FTP im Heimnetz und **höchstens eine gleichzeitige Verbindung**. Begrenze dies beispielsweise in FileZilla auf 1. Übertrage große Musikbestände besser mit einem Kartenleser. FTP ist kein Musikstreaming-Zugang.
 

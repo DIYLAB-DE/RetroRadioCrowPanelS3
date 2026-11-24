@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <cstring>
 
-// Partitionsname (muss mit partitions_crowpanel.csv übereinstimmen)
+// Partitionsname (muss mit partitions_crowpanel7.csv übereinstimmen)
 static constexpr const char *PARTITION_LABEL = "stations";
 static constexpr esp_partition_subtype_t PARTITION_SUBTYPE =
     static_cast<esp_partition_subtype_t>(0x80);

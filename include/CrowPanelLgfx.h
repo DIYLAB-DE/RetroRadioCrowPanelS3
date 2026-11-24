@@ -16,7 +16,7 @@ public:
     }
 };
 
-/** @brief Display des CrowPanel 7.0" ESP32-S3: RGB-Parallelbus mit 16 Datenleitungen (RGB565) am LCD_CAM des S3, Treiber EK9716BD3 und EK73002ACGB ohne Befehlsschnittstelle, Bildspeicher im PSRAM, Timing laut Herstellerwiki. Hintergrundlicht PWM an IO2. Kein Touch hier, der GT911 läuft über CrowPanelTouch und Wire. */
+/** @brief Display des CrowPanel 7.0" ESP32-S3: RGB-Parallelbus mit 16 Datenleitungen (RGB565) am LCD_CAM des S3, Treiber EK9716BD3 und EK73002ACGB ohne Befehlsschnittstelle, Bildspeicher im PSRAM, Austastlücken am Minimum des Datenblatts EK9716, Pixeltakt 12 MHz. Hintergrundlicht PWM an IO2. Kein Touch hier, der GT911 läuft über CrowPanelTouch und Wire. */
 class CrowPanelLgfx : public lgfx::LGFX_Device
 {
 public:

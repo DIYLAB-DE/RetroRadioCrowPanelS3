@@ -109,7 +109,7 @@ static_assert(sizeof(StationsSlotHeader) + MAX_STATIONS * sizeof(StationRecord) 
  *
  * Speicherung: Dedizierte Flash-Partition ("stations") statt LittleFS, darin zwei abwechselnd beschriebene Ablageplätze, damit ein Abbruch beim Speichern die vorherige Liste nicht zerstört. Fallback: PROGMEM-Defaults aus StationsDefault.h, wenn kein Platz gültig ist.
  *
- * Speicherverbrauch RAM: ~70 × 350 Bytes ≈ 24 KB (statisch, kein Heap)
+ * Speicherverbrauch RAM: ~70 × 350 Bytes ≈ 24 KB als festes Array im Objekt, ohne eigene Heap-Allokation
  */
 class StationManager
 {

@@ -347,8 +347,11 @@ private:
     ModernRequest m_modernWork;                                          ///< Kopierter Auftrag im Dienstworker
     /** @brief Speichert oder löscht rr_crowpanel/modern_v1 nach m_modernWork, liest zur Bestätigung zurück und reiht das Ergebnis ein. Nur im Dienstworker. */
     void executeModern();
-    RadioPreferences m_radio;
-    RadioPreferences m_radioNvs;
+    /** @brief Löscht für das Zurücksetzen aller Einstellungen die gesicherten Radiowerte, die Grundfarben von Modern und das FTP-Passwort im NVS und führt den Stand im RAM nach. Ein angemeldeter FTP-Client wird über die Passwortrevision getrennt, bei eingeschaltetem FTP fordert der Dienst danach sofort ein neues Passwort an. Den Radiozustand der Bedienung setzt der UI-Task nach dem Ergebnis selbst zurück. Nur im Dienstworker. @return false bei NVS-Fehler, dann kann ein Teil schon gelöscht sein. */
+    bool resetStored();
+    RadioPreferences m_radio;        ///< Aktueller Radiozustand aus allen Bedienwegen, geschützt durch m_configLock
+    RadioPreferences m_radioNvs;     ///< Zuletzt im NVS gesicherter Radiozustand, nur im Dienstworker
+    bool m_radioStored = false;      ///< rr_crowpanel/radio_v1 war beim Laden vorhanden und gültig
     CrowPanelRtc m_rtc;
     CrowPanelRtc::Status m_rtcStatus;
     uint32_t m_rtcAttempt = 0, m_rtcTimeAttempt = 0, m_rtcRefresh = 0, m_flashAttempt = 0;

@@ -120,7 +120,7 @@ bool AppServices::validConfiguration(const Settings::Configuration &config)
 void AppServices::load()
 {
     CrowPanelConfig::load(m_config, m_revision, &m_extras);
-    m_radio = CrowPanelConfig::loadRadio();
+    m_radio = CrowPanelConfig::loadRadio(&m_radioStored);
     // Die Warnung zu einem ungültigen Eintrag meldet schon das Laden beim Start in setup().
     m_modernStored = CrowPanelConfig::loadModern(m_modern, false);
     if (CrowPanelConfig::loadFtpPassword(m_ftpPassword))
@@ -172,8 +172,7 @@ bool AppServices::begin(uint8_t defaultStation)
         LOG_ERROR("Netzwerkstack konnte nicht gestartet werden.");
         return false;
     }
-    // Selten benutzte Dateiaufträge gehören in den PSRAM. Sperren und atomare
-    // Zustände des Dienstes bleiben im internen RAM, beide Aufträge getrennt.
+    // Selten benutzte Dateiaufträge gehören in den PSRAM. Sperren und atomare Zustände des Dienstes bleiben im internen RAM, beide Aufträge getrennt.
     if (void *memory = heap_caps_malloc(sizeof(WebFileRequest), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))
         m_webWork = new (memory) WebFileRequest();
     if (void *memory = heap_caps_malloc(sizeof(SdFileRequest), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))
@@ -196,11 +195,14 @@ bool AppServices::begin(uint8_t defaultStation)
     m_radio.station = CrowPanelConfig::loadStation(storedStation) ? storedStation : defaultStation < 70 ? defaultStation
                                                                                                         : 0;
     const bool rtcReady = m_rtc.begin();
-    // Auch ohne RTC aufrufen: loadRadio begrenzt dann den Pegel aus radio_v1.
-    if (m_rtc.loadRadio(m_radio, AudioManager::DefaultVolume))
+    // Auch ohne RTC aufrufen: Ohne gültiges NVRAM gilt ein gesicherter Eintrag radio_v1 unverändert, nur die Vorgaben eines Geräts ohne gesicherte Radiowerte begrenzt loadRadio auf den leisen Startpegel.
+    const uint8_t quietVolume = m_radioStored ? AudioManager::MaxVolume : AudioManager::DefaultVolume;
+    if (m_rtc.loadRadio(m_radio, quietVolume))
         LOG_INFO("RTC Radiozustand geladen.");
+    else if (m_radioStored)
+        LOG_INFO("RTC Radiozustand fehlt oder ist ungültig, gesicherte NVS-Werte übernommen.");
     else
-        LOG_INFO_F("RTC Radiozustand fehlt oder ist ungültig, NVS-Werte mit Pegel höchstens %u übernommen.", AudioManager::DefaultVolume);
+        LOG_INFO_F("RTC Radiozustand fehlt oder ist ungültig, Vorgaben mit Pegel höchstens %u übernommen.", AudioManager::DefaultVolume);
     if (rtcReady)
     {
         const auto status = m_rtc.status();
@@ -352,6 +354,8 @@ bool AppServices::prepareWifi()
         return true;
     WiFi.persistent(false);
     WiFi.setHostname(m_config.hostname);
+    // Modem-Sleep bleibt aus, damit HTTP-Antworten ohne zusätzliche WLAN-Aufwachzeit beginnen. Der Aufruf steht vor dem Start der Station: Arduino merkt sich dann nur den Wert und setzt ihn beim Ereignis STA_START selbst. Nach dem Start aufgerufen läuft setSleep() gegen diese Ereignisbehandlung, die noch den Vorgabewert mit Modem-Sleep liest und ihn als Letzte setzt.
+    WiFi.setSleep(false);
     LOG_INFO("WLAN: Station initialisieren.");
     m_wifiReady = WiFi.STA.begin(false);
     if (!m_wifiReady)
@@ -359,8 +363,6 @@ bool AppServices::prepareWifi()
         LOG_PLAIN_F("WIFI_PROFILE ERROR_INIT");
         return false;
     }
-    // Modem-Sleep bleibt aus, damit HTTP-Antworten ohne zusätzliche WLAN-Aufwachzeit beginnen.
-    WiFi.setSleep(false);
     uint8_t mac[6]{};
     const auto result = esp_wifi_get_mac(WIFI_IF_STA, mac);
     if (result != ESP_OK || (mac[0] & 1) || !(mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5]))
@@ -457,6 +459,11 @@ void AppServices::execute()
         else if (!validConfiguration(candidate) || !CrowPanelConfig::valid(extras))
         {
             m_result.error = Error::Invalid;
+        }
+        // Vor der Konfiguration: Scheitert das Löschen, bleibt sie mit ihrer Revision unverändert und der Auftrag lässt sich wiederholen.
+        else if (m_work.type == Type::ResetDefaults && !resetStored())
+        {
+            m_result.error = Error::Storage;
         }
         // Log-Schalter und PIN-Sperre schreiben nur ihren eigenen Eintrag, der Sekundenzeiger ebenso. Alle anderen Aufträge schreiben den ganzen Datensatz.
         else if (m_result.changedFields == Settings::SerialLogs   ? !CrowPanelConfig::saveSerialLogs(candidate.serialLogs)
@@ -607,6 +614,28 @@ void AppServices::execute()
     LOG_INFO_F("DIENST Typ=%u Auftrag=%lu Ergebnis=%u Fehler=%u", static_cast<unsigned>(m_result.type), static_cast<unsigned long>(m_result.id), static_cast<unsigned>(m_result.outcome), static_cast<unsigned>(m_result.error));
     xQueueSend(m_results, &m_result, portMAX_DELAY);
     mbedtls_platform_zeroize(&m_result, sizeof(m_result));
+}
+
+bool AppServices::resetStored()
+{
+    const bool erased = CrowPanelConfig::resetRadio() && CrowPanelConfig::resetModern() && CrowPanelConfig::resetFtpPassword();
+    // Rücklesen auch nach einem Fehler: Der Stand im RAM soll zeigen, was nach dem nächsten Neustart gilt.
+    ModernFarben modern;
+    const bool modernStored = CrowPanelConfig::loadModern(modern, false);
+    char password[FtpProtocol::PasswordCapacity]{};
+    CrowPanelConfig::loadFtpPassword(password);
+    m_radioNvs = CrowPanelConfig::loadRadio(&m_radioStored);
+    portENTER_CRITICAL(&m_configLock);
+    m_modern = modern;
+    m_modernStored = modernStored;
+    const bool passwordChanged = memcmp(m_ftpPassword, password, sizeof(m_ftpPassword)) != 0;
+    memcpy(m_ftpPassword, password, sizeof(m_ftpPassword));
+    portEXIT_CRITICAL(&m_configLock);
+    FtpProtocol::wipe(password, sizeof(password));
+    if (passwordChanged)
+        m_ftpPasswordRevision.fetch_add(1);
+    LOG_INFO_F("Radiowerte, Modern-Farben und FTP-Passwort im NVS %s", erased ? "gelöscht" : "nicht vollständig gelöscht");
+    return erased;
 }
 
 SdServiceStatus AppServices::mediaStatus()

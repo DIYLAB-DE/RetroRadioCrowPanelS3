@@ -19,7 +19,7 @@ namespace
     constexpr uint32_t SendPauseMs = 2;           ///< Pause nach jedem Sendeaufruf für die übrigen Tasks
     constexpr size_t ReceiveBlock = 4096;         ///< Größter Empfangsaufruf, wie die 4-KiB-Uploadblöcke des Webportals
     constexpr uint32_t ReceivePauseMs = 24;       ///< Pause nach jedem Empfangsaufruf, höchstens rund 170 KB/s. Hält das TCP-Fenster klein, damit die WLAN-Empfangspuffer im knappen internen Speicher nicht dauerhaft wachsen
-    constexpr size_t UploadBlock = 32768;         ///< Kleinster größter freier interner DMA-Block, mit dem Uploaddaten angenommen werden. Darunter bleibt der Block für WLAN, TLS, I2S und Kartentreiber reserviert, der Upload wird abgewiesen
+    constexpr size_t UploadBlock = 16384;         ///< Kleinster größter freier interner DMA-Block, mit dem Uploaddaten angenommen werden. Darunter bleibt der Block für WLAN, TLS und I2S reserviert, der Upload wird abgewiesen. Ohne Wiedergabe ist der größte freie Block am S3 rund 31,7 KB groß, die Grenze muss deutlich darunter liegen
     constexpr uint32_t UploadMemoryWaitMs = 5000; ///< So lange wartet receive() ohne zu lesen, bis der Block wieder reicht. Danach bricht der Upload ab
     constexpr uint32_t StackBytes = 8192;         ///< Stack des FTP-Tasks im PSRAM
     constexpr uint32_t IdleWaitMs = 500;          ///< Wartezeit des ausgeschalteten Tasks bis zur nächsten Prüfung des Schalters

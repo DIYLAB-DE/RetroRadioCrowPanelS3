@@ -8,7 +8,7 @@ Diese Anleitung führt Dich von der Vorbereitung des Rechners bis zum gestartete
 
 > **Vier Nullen: 0 · 0 · 0 · 0.** Tippe auf den Sperrbildschirm, gib **0000** ein und bestätige mit **ok**. Die Start-PIN gilt bei einer frischen Einrichtung für Display und Weboberfläche. Eine bereits gespeicherte eigene PIN bleibt bei einem Update erhalten. Ändern kannst Du sie unter **Einstellungen -> Sicherheit**.
 
-**Stand: 22.11.2026.** Die Firmware wurde unter Linux gebaut und auf dem CrowPanel geprüft. Der Upload auf ein bereits eingerichtetes Gerät ist bestätigt. Ein vollständiger Durchlauf ab Werksfirmware sowie Durchläufe unter Windows und macOS stehen aus. Die beschriebenen Windows- und macOS-Schritte entsprechen dem üblichen PlatformIO-Ablauf und stützen sich auf die unten verlinkten offiziellen Anleitungen.
+**Stand: 24.11.2026.** Die Firmware wurde unter Linux gebaut und auf dem CrowPanel geprüft. Der Upload auf ein bereits eingerichtetes Gerät ist bestätigt. Ein vollständiger Durchlauf ab Werksfirmware sowie Durchläufe unter Windows und macOS stehen aus. Die beschriebenen Windows- und macOS-Schritte entsprechen dem üblichen PlatformIO-Ablauf und stützen sich auf die unten verlinkten offiziellen Anleitungen.
 
 > Das Display war eine Leihgabe. Vielen Dank an **Jupp**, der das Projekt damit ermöglicht hat! Es steht inzwischen nicht mehr für die Entwicklung zur Verfügung. Weitere Änderungen können deshalb kaum bis gar nicht mehr an diesem Display erprobt werden.
 
@@ -133,7 +133,7 @@ Im PlatformIO-Terminal zeigt `pio device list` die verfügbaren Geräte. Ziehe b
 
 ### macOS: CH340-Treiber installieren und freigeben
 
-Erscheint der Port bereits, ist keine zusätzliche Treiberinstallation nötig. Andernfalls bietet das [WCH-Repository ch34xser_macos](https://github.com/WCHSoftGroup/ch34xser_macos) Treiber für die CH340-Familie und weitere WCH-Bausteine. Beim S3 verwenden wir **CH340 an UART0**. Die Chipvariante CH340K aus dem P4-Erfahrungsbericht ist keine Hardwareangabe für dieses S3-Projekt.
+Erscheint der Port bereits, ist keine zusätzliche Treiberinstallation nötig. Andernfalls bietet das [WCH-Repository ch34xser_macos](https://github.com/WCHSoftGroup/ch34xser_macos) Treiber für die CH340-Familie und weitere WCH-Bausteine. Das CrowPanel verwendet einen **CH340 an UART0**.
 
 1. Lade für den beschriebenen DMG-Weg `CH34xVCPDriver.dmg` aus dem WCH-Repository herunter und öffne es. Beachte die dortigen Hinweise zur passenden Paketvariante für Deine macOS-Version.
 2. Ziehe **CH34xVCPDriver** nach **Programme / Applications**.
@@ -141,13 +141,13 @@ Erscheint der Port bereits, ist keine zusätzliche Treiberinstallation nötig. A
 4. Erlaube die WCH-Treibererweiterung in den Systemeinstellungen. Unter aktuellem macOS findest Du sie unter **Allgemein -> Anmeldeobjekte & Erweiterungen -> Treiber**. Apple beschreibt diese [Einstellungen und Freigaben](https://support.apple.com/de-de/guide/mac-help/mtusr003/27/mac/27). Bei älteren Versionen kann die Freigabe unter **Datenschutz & Sicherheit** liegen.
 5. Starte den Mac neu, falls die Installation es verlangt. Verbinde das Display erneut und prüfe `pio device list` im PlatformIO-Terminal oder `ls /dev/cu.*` im macOS-Terminal.
 
-Ein Rückmelder konnte so ein P4-CrowPanel an einem Mac mini M1 unter macOS 27 programmieren. Die Hinweise zur Python-Umgebung und WCH-Treiberinstallation sind auch hier relevant. Ein erfolgreicher S3-Upload unter macOS ist damit noch nicht bestätigt.
+Ein Upload unter macOS ist mit diesem CrowPanel noch nicht bestätigt.
 
 ## 6. Was der Upload verändert
 
 Das Projekt verwendet den gewöhnlichen PlatformIO-Upload mit **esptool**. Es werden Bootloader, Partitionstabelle und Firmware in den Flashspeicher des ESP32-S3 geschrieben und die übertragenen Daten geprüft. Das Board wird normalerweise automatisch in den Downloadmodus versetzt und danach neu gestartet.
 
-Die Einstellungen einschließlich PIN und WLAN-Profilen liegen getrennt von der Firmware. Auch die Senderliste hat einen eigenen Bereich. Bei einem gewöhnlichen Update mit der unveränderten [Partitionstabelle](../partitions_crowpanel7.csv) bleiben diese Daten erhalten. Das wurde beim Update auf v26.11.22 geprüft. Dateien auf der SD-Karte werden durch den Upload nicht verändert.
+Die Einstellungen einschließlich PIN und WLAN-Profilen liegen getrennt von der Firmware. Auch die Senderliste hat einen eigenen Bereich. Bei einem gewöhnlichen Update mit der unveränderten [Partitionstabelle](../partitions_crowpanel7.csv) bleiben diese Daten erhalten. Das wurde bei den Updates auf v26.11.22 und v26.11.24 geprüft. Dateien auf der SD-Karte werden durch den Upload nicht verändert.
 
 Ein vollständiges Löschen des Flashspeichers würde die gespeicherten Einstellungen und Sender entfernen. Für die hier beschriebene Installation und spätere Updates ist ein solcher Löschschritt nicht vorgesehen. Sichere eine eigene Senderliste trotzdem vor einem Update über die [Weboberfläche](Weboberfläche.md#reihenfolge-und-sicherung).
 
@@ -365,7 +365,7 @@ Die [Projektkonfiguration](../platformio.ini) legt pioarduino **55.03.37**, Ardu
 
 Das Boardprofil gilt für den ESP32-S3 mit 4 MB Flash und 8 MB PSRAM. Display, Touch, SD-Karte und Mono-Lautsprecherausgang werden durch das Projekt eingerichtet. Für die optionale DS1307 ist keine Quellcodeänderung nötig.
 
-Beide Umgebungen wurden unter Linux erfolgreich gebaut. Übertragen wurde **crowpanel7_dev als v26.11.22** für die Bildschirmaufnahmen, Einstellungen und Sender blieben erhalten. Windows und macOS wurden anhand der offiziellen Installationsunterlagen beschrieben, dort ist noch kein vollständiger Durchlauf am Gerät erfolgt. Eine Erstinstallation ab Werksfirmware und der Rückweg zur Herstellerdemo sind ebenfalls nicht als praktisch geprüft ausgewiesen.
+Beide Umgebungen wurden unter Linux erfolgreich gebaut. Übertragen wurden **crowpanel7_dev als v26.11.24** für die Bildschirmaufnahmen und danach **crowpanel7 als v26.11.24**, Einstellungen und Sender blieben erhalten. Windows und macOS wurden anhand der offiziellen Installationsunterlagen beschrieben, dort ist noch kein vollständiger Durchlauf am Gerät erfolgt. Eine Erstinstallation ab Werksfirmware und der Rückweg zur Herstellerdemo sind ebenfalls nicht als praktisch geprüft ausgewiesen.
 
 Weitere Hinweise zum laufenden Gerät stehen unter [Fehlerhilfe](Fehlerhilfe.md).
 

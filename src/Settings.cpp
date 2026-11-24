@@ -2325,9 +2325,9 @@ void Settings::drawPanelInfo(UiCanvas *spr)
     }
     else
         stringutils::safeCopy(chipTempBuf, ot(OKey::INFO_CHIP_TEMP_NOT_CHECKED));
-    // Adresse mit Benutzer als FTP-URL, das Passwort gibt es nur im Webportal hinter der PIN.
+    // Adresse mit Benutzer als FTP-URL, sie zeigt zugleich den eingeschalteten Dienst. Ein vorangestelltes „an“ hätte neben der Beschriftung bei langer IP-Adresse keinen Platz. Das Passwort gibt es nur im Webportal hinter der PIN.
     if (m_status.ftpEnabled && wifiOn)
-        snprintf(ftpBuf, sizeof(ftpBuf), "%s, ftp://%s@%u.%u.%u.%u", ot(OKey::INFO_FTP_ON), FtpProtocol::User, m_status.ipv4[0], m_status.ipv4[1], m_status.ipv4[2], m_status.ipv4[3]);
+        snprintf(ftpBuf, sizeof(ftpBuf), "ftp://%s@%u.%u.%u.%u", FtpProtocol::User, m_status.ipv4[0], m_status.ipv4[1], m_status.ipv4[2], m_status.ipv4[3]);
     else
         stringutils::safeCopy(ftpBuf, ot(m_status.ftpEnabled ? OKey::INFO_FTP_ON : OKey::INFO_FTP_OFF));
     // Ergebnis des einmaligen Startscans. Es gibt nur einen Bus, für Touch, IO-Expander und den I2C-Stecker.
@@ -2497,7 +2497,6 @@ void Settings::drawPanelInfo(UiCanvas *spr)
     spr->setClipRect(i2cX, i2cY, i2cW, ROW_H);
     spr->drawString(i2cBuf, i2cX, i2cY + ROW_H / 2);
     spr->clearClipRect();
-    spr->fillRect(CONTENT_X + ROW_PAD_X, i2cY + ROW_H - LINE, CONTENT_W - 2 * ROW_PAD_X, LINE, trenner);
 
     spr->unloadFont();
 }
@@ -2872,6 +2871,7 @@ void Settings::drawFrame(bool paint)
     }
     const OKey labels[] = {OKey::MENU_WIFI, OKey::MENU_TIME, OKey::MENU_TIME_WINDOW, OKey::MENU_LANGUAGE, OKey::MENU_SECURITY, OKey::MENU_AUDIO, OKey::MENU_APPEARANCE, OKey::MENU_THEME, OKey::MENU_SCREEN, OKey::MENU_INFO};
     static_assert(sizeof(labels) / sizeof(labels[0]) == PanelCount, "Ein Menütext je Seite");
+    static_assert(2 * SECTION_ROW_H + PanelCount * ITEM_ROW_H == SCREEN_H, "Köpfe und Einträge füllen die Menüspalte genau");
     constexpr int systemPanel = static_cast<int>(Panel::Language); ///< Erste Seite des Abschnitts System
     int y = 0;
     for (int panel = 0; panel < PanelCount; ++panel)
@@ -2900,7 +2900,9 @@ void Settings::drawFrame(bool paint)
             m_painter.setTextColor(selected ? textHell : text, bg);
             m_painter.setTextDatum(ML_DATUM);
             m_painter.drawString(ot(labels[panel]), MENU_X + ITEM_TEXT_X, y + ITEM_ROW_H / 2);
-            m_painter.fillRect(MENU_X + ITEM_ACCENT_W, y + ITEM_ROW_H - LINE, MENU_W - ITEM_ACCENT_W, LINE, trenner);
+            // Unter dem letzten Eintrag liegt der Bildschirmrand, dort trennt die Linie nichts.
+            if (panel < PanelCount - 1)
+                m_painter.fillRect(MENU_X + ITEM_ACCENT_W, y + ITEM_ROW_H - LINE, MENU_W - ITEM_ACCENT_W, LINE, trenner);
         }
         target({MENU_X, y, MENU_W, ITEM_ROW_H}, Nav + panel, true, false);
         y += ITEM_ROW_H;

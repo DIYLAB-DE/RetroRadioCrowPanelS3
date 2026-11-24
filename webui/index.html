@@ -5949,6 +5949,27 @@ DISCLAIMER THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
       context.drawImage(full, 0, 0, canvas.width, canvas.height);
     }
 
+    /** @brief Lädt die Seite nach einem angeforderten Neustart neu, sobald das Gerät wieder antwortet. Wartet zuerst höchstens 10 s, bis es nicht mehr antwortet, dann höchstens 60 s auf die erste Antwort. Danach lädt die Seite in jedem Fall neu, ein nicht mehr erreichbares Gerät (anderer Netzwerkname, anderes WLAN) zeigt dann die Fehlerseite des Browsers. */
+    async function reloadAfterRestart() {
+      // /favicon.ico antwortet ohne Anmeldung mit 204 und ist die kleinste Anfrage des Portals.
+      const answers = async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+        try {
+          return (await fetch('/favicon.ico', { cache: 'no-store', signal: controller.signal })).ok;
+        } catch (error) {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const start = Date.now();
+      while (Date.now() - start < 10000 && await answers()) await pause(500);
+      while (Date.now() - start < 70000 && !(await answers())) await pause(1000);
+      location.reload();
+    }
+
     /** @brief Sendet einen Auftrag für Thema oder Grundfarben und lädt nach Erfolg wie beim Speichern der Einstellungen neu. */
     async function sendAppearance(url, payload, doneKey) {
       try {
@@ -5959,7 +5980,7 @@ DISCLAIMER THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
         });
         if (response.ok) {
           alert(t(doneKey));
-          setTimeout(() => location.reload(), 3000);
+          reloadAfterRestart();
         } else {
           const data = await response.json();
           alert(t('js.error') + (data.error || t('js.unknownError')));
@@ -6039,7 +6060,7 @@ DISCLAIMER THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
           if (response.ok) {
             localStorage.setItem('retroRadioLanguage', normalizeLanguage(document.getElementById('languageSelect').value));
             alert(t('js.settingsSavedRestart'));
-            setTimeout(() => location.reload(), 3000);
+            reloadAfterRestart();
           } else {
             const data = await response.json();
             alert(t('js.error') + (data.error || t('js.unknownError')));
@@ -6055,7 +6076,7 @@ DISCLAIMER THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
           const response = await fetch('/api/reboot', { method: 'POST' });
           if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
           alert(t('js.restarting'));
-          setTimeout(() => location.reload(), 3000);
+          reloadAfterRestart();
         } catch (e) { alert(t('js.networkError') + e.message); }
       });
 
@@ -7314,8 +7335,8 @@ DISCLAIMER THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
         _ctx.restore();
       }
 
-      // Die Webnadel fährt wie die Gerätenadel (RadioLayout.h, RetroRadio::advanceNeedle): aus dem Stand in NEEDLE_START_S auf NEEDLE_PPS logische Pixel pro Sekunde, vor dem Ziel in NEEDLE_BRAKE_S bis zum Stand. Ein neues Ziel übernimmt Lage und Geschwindigkeit stetig. Liegt es in Fahrtrichtung näher als der Bremsweg, bremst die Nadel für diese Fahrt gerade so stark, dass sie dort steht. Die Fahrt folgt der Uhr des Browsers und läuft unabhängig von der Gerätenadel und deren Startfreigabe.
-      const NEEDLE_PPS = 144, NEEDLE_START_S = 0.40, NEEDLE_BRAKE_S = 0.42;
+      // Die Webnadel fährt wie die Gerätenadel (RadioLayout.h, RetroRadio::advanceNeedle): aus dem Stand in NEEDLE_START_S auf NEEDLE_PPS logische Pixel pro Sekunde (am Gerät NEEDLE_PX_PER_FRAME 5,2 px je Bild bei rund 25,6 Bildern/s), vor dem Ziel in NEEDLE_BRAKE_S bis zum Stand. Ein neues Ziel übernimmt Lage und Geschwindigkeit stetig. Liegt es in Fahrtrichtung näher als der Bremsweg, bremst die Nadel für diese Fahrt gerade so stark, dass sie dort steht. Die Fahrt folgt der Uhr des Browsers und läuft unabhängig von der Gerätenadel und deren Startfreigabe.
+      const NEEDLE_PPS = 133, NEEDLE_START_S = 0.40, NEEDLE_BRAKE_S = 0.42;
       const NEEDLE_STEP_S = 0.004, NEEDLE_MAX_GAP_S = 10; // Teilschritt der Rechnung und längste nachgeholte Pause (Tab im Hintergrund), danach steht die Nadel am Ziel
       let _needleV = 0, _needleBrake = 0, _animLast = null;
 
